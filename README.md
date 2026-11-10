@@ -75,7 +75,7 @@ python main.py
 6. **Simulation** (`results/<community>/03_micrm/`):
    - **U**: for each genus × resource pair, supply 1 unit of carbon, find the first feasible retention fraction in a prior order, then use LP to find the minimum carbon flux burden B, with u = 10/(1+B).
    - **L**: take the maximum output entropy over the same feasible flux polytope as the leakage allocation. `binary_leakage.csv` lists every substrate -> product combination.
-   - **Abundance constraints**: each row of U is multiplied by abundance / mean abundance; L is reallocated as 90% abundance-weighted demand + 10% uniform, keeping the total carbon unchanged.
+   - **Abundance constraints**: each row of U is multiplied by abundance / mean abundance; L is reallocated as 90% abundance-weighted demand + 10% uniform, keeping the total carbon unchanged. In some samples, missing information during genome reconstruction may lead to an incomplete representation of the metabolic potential of dominant consumers, causing them to become disadvantaged in simulations, in direct contrast to observations. The underlying assumption is that more abundant taxa are likely to consume more resources.
    - **MiCRM**: C0 = 1, total R0 = 1e-4, total ρ = 5 (both distributed uniformly over the resource panel), turnover 0.1, integrated with BDF to steady state.
    - **Plotting**: draw a bar chart comparing the relative abundances of the modelled genera in the community, and collect them into `results/figures/<community>.png`.
 
