@@ -92,15 +92,6 @@ python main.py
 | `results/<community>/02_inputs/` | genera / resources / observed / kinetics / maintenance / binary_uptake |
 | `results/<community>/03_micrm/` | parameters.npz (U, L, K, m, R0, ρ), parameter_audit.json, simulation.json, abundance_comparison.csv, comparison.png, metadata.json |
 
-## Differences from the original HPC workflow
-
-- The resource panel is now generated automatically from the GEMs, and all resources are supplied. The original workflow relied on an external reference carbon resource table (`reference_universe_v1.csv`), in which each resource was supplied at 5 / (number of reference resources); here the total ρ is 5, distributed uniformly within the panel.
-- Only one genome is chosen per genus, selected from several candidates using 16S Mash. The original HPC library top-up simply used the first candidate.
-- Similar-genus and family fallbacks are new. The original workflow only had an alias table.
-- The original workflow required 5 input tables (kinetics.csv, maintenance.csv, etc.) to be prepared manually; they are now all generated automatically.
-- The code for U/L estimation, abundance constraints, the BDF solver and plotting is the same as in `micrm_shared`, except that C0, turnover and t_end are now configurable in the config.
-- No old catalogs, caches or GEMs are read.
-
 ## Notes
 
 - `kinetics_evidence.csv` is the literature evidence for K (part of the method), so it is shipped together with the code.
