@@ -1,4 +1,4 @@
-# MiCRM 16S workflow
+# GEM-CRM workflow
 
 Go from raw 16S FASTQ files to a "MiCRM simulated abundance vs 16S observed abundance" comparison bar chart in one command.
 No data, caches or pre-built GEMs are included. All required reference databases, genomes and GEMs are downloaded or built automatically on the first run and cached, so they can be reused directly when you switch to new data.
@@ -6,7 +6,7 @@ No data, caches or pre-built GEMs are included. All required reference databases
 ## Directory layout
 
 ```
-micrm_workflow/
+GEM-CRM/
 ├── main.py              # One-command entry point; runs the 6 steps in order
 ├── config.toml          # All tunable parameters (paths, threads, thresholds, MiCRM settings)
 ├── environment.yml      # conda environment (R/DADA2, gapseq, barrnap, mash, NCBI datasets)
