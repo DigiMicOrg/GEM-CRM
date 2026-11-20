@@ -3,9 +3,9 @@
 Go from raw 16S FASTQ files to a "MiCRM simulated abundance vs 16S observed abundance" comparison bar chart in one command.
 No data, caches or pre-built GEMs are included. All required reference databases, genomes and GEMs are downloaded or built automatically on the first run and cached, so they can be reused directly when you switch to new data.
 
-![Comparison of MiCRM-simulated and 16S-observed relative abundances](docs/images/example.jpg)
+![Comparison of MiCRM-simulated and 16S-observed relative abundances](docs/images/example.png)
 
-*Example output: observed 16S relative abundances (blue) and MiCRM-simulated relative abundances (red) across modelled genera.*
+*Example output: observed 16S relative abundances (blue) and calibrated MiCRM relative abundances (red) across modelled genera.*
 
 ## Directory layout
 

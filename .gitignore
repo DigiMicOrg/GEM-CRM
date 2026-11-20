@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Local launchers (not part of the repo)
+*.command
+.run.lock/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# R
+.Rhistory
+.RData
+
+# Input data: put FASTQ files in 16data/ (only the README is tracked)
+16data/*
+!16data/README.txt
+
+# Downloaded / built on first run
+databases/
+genomes/
+gems/
+results/
+
+# Logs
+*.log
