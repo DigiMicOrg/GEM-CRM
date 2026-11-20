@@ -4,6 +4,7 @@ Downloaded once into the databases/ folder and reused afterwards:
   * SILVA 138.2 DADA2 genus training set (taxonomy assignment)
   * Madin et al. 2020 condensed species trait table (cell size -> m)
   * gapseq sequence database (via `gapseq update-sequences`, optional)
+  * MicrobeAtlas genus x environment abundance prior (see prior.py)
 """
 
 import shutil
@@ -76,6 +77,9 @@ def ensure_databases(cfg, root, steps):
             path = root / path
         out["madin"] = download(p["madin_url"], path, "Madin trait table")
         manifest.setdefault("madin", dict(url=p["madin_url"], file=str(path.name), sha256=digest(path)))
+        import prior
+        pr = cfg.get("prior", {})
+        out["prior"] = prior.ensure(db / "microbeatlas", root / cfg["paths"]["raw_data"], int(pr.get("min_samples", 30)))
     if "gems" in steps:
         g = cfg["gems"]
         if g.get("gapseq_db"):

@@ -5,15 +5,18 @@
     python main.py --check              # only check tools and download databases
     python main.py --steps params,simulate --rerun   # redo parameters + simulation
     python main.py --communities S1,S2  # restrict to some communities
+    python main.py --replot             # only redraw figures from finished simulations
 
 Steps
   1 denoise   DADA2 denoising + SILVA genus assignment         (workflow/denoise.R)
   2 taxa      collect genera and their ASV sequences across communities
   3 genomes   NCBI reference genome per genus (+related genus / family fallback)
   4 gems      gapseq GEM per selected genome (cached in gems/)
-  5 params    binary uptake, resource panel, K (literature), m (cell size)
-  6 simulate  U (min carbon-throughput LP), L (max output entropy), abundance
-              calibration, BDF MiCRM, comparison bar chart
+  5 params    sequence-supported uptake, resource panel, K (literature), m (cell size),
+              MicrobeAtlas genus x environment prior (built on first use)
+  6 simulate  U (min carbon-throughput LP), L (max output entropy), equal uptake budget,
+              uptake capacity s from the prior, nutrient supply from the sample,
+              log-biomass MiCRM, leave-one-genus-out check, genome-only baseline, bar chart
 """
 
 import os
@@ -80,12 +83,32 @@ def simulate_one(job):
             micrm.run(_a.Namespace(input=str(inputs), catalog=str(catalog), cache=str(cache), out=str(out),
                                    initial_total=float(mcfg["initial_total"]), feed_total=float(mcfg["feed_total"]),
                                    biomass=float(mcfg["biomass"]), turnover=float(mcfg["turnover"]),
-                                   t_end=float(mcfg["t_end"]), title=name))
+                                   t_end=float(mcfg["t_end"]), title=name,
+                                   detection_limit=float(mcfg.get("detection_limit", 1e-6)),
+                                   resource_cap=float(mcfg.get("resource_cap", 0.2)),
+                                   leave_one_out=bool(mcfg.get("leave_one_out", True)),
+                                   plot_scale=str(mcfg.get("plot_scale", "linear")),
+                                   environment=str(mcfg.get("environment", ""))))
         return name, "completed", read_json(out / "metadata.json"), ""
     except Exception as e:
         with log_path.open("a") as f:
             f.write(traceback.format_exc())
         return name, "failed", None, str(e)[:300]
+
+
+def summary_fields(meta):
+    """Flatten the per-method scores of one community for summary.csv."""
+    sc = meta.get("metrics", {})
+    cal, loo, gem = sc.get("calibrated", {}), sc.get("leave_one_out", {}), sc.get("gem_only", {})
+    n = meta.get("genera")
+    return dict(jsd=meta.get("jsd"),
+                retained=f"{cal['retained']}/{n}" if cal else "",
+                rare_retained=f"{cal['rare_retained']}/{cal['rare_genera']}" if cal else "",
+                loo_spearman=loo.get("spearman_log", ""),
+                loo_retained=f"{loo['retained']}/{n}" if loo else "",
+                gem_only_jsd=gem.get("jsd", ""),
+                gem_only_retained=f"{gem['retained']}/{n}" if gem else "",
+                uptake_corrections=meta.get("uptake_corrections", ""))
 
 
 def main():
@@ -95,9 +118,24 @@ def main():
     p.add_argument("--communities", default="", help="comma-separated community names (default: all)")
     p.add_argument("--rerun", action="store_true", help="redo simulations that already finished")
     p.add_argument("--check", action="store_true", help="check tools and download databases, then stop")
+    p.add_argument("--replot", action="store_true",
+                   help="only redraw comparison figures from finished simulations, then stop")
     a = p.parse_args()
 
     cfg = load_config(a.config)
+    if a.replot:
+        import micrm
+        results = ROOT / cfg["paths"]["results"]
+        keep = {c.strip() for c in a.communities.split(",") if c.strip()}
+        (results / "figures").mkdir(parents=True, exist_ok=True)
+        for out in sorted(results.glob("*/03_micrm")):
+            name = out.parent.name
+            if (keep and name not in keep) or not (out / "abundance_comparison.csv").exists():
+                continue
+            png = micrm.replot(out, name, str(cfg["micrm"].get("plot_scale", "linear")))
+            shutil.copy2(png, results / "figures" / f"{name}.png")
+            log("figure", results / "figures" / f"{name}.png")
+        return 0
     steps = [s.strip() for s in a.steps.split(",") if s.strip()]
     if bad := set(steps) - set(STEPS):
         p.error("unknown steps: " + ", ".join(sorted(bad)))
@@ -162,8 +200,18 @@ def main():
     if "params" in steps or "simulate" in steps:
         import maintenance
         import parameterize
-        log("== Step 5: binary uptake, resource panel, K and m")
+        import prior
+        log("== Step 5: binary uptake, resource panel, K, m and MicrobeAtlas prior")
         pc = cfg["parameters"]
+        environment = cfg["prior"]["environment"]
+        prior_table = dbs.get("prior") or databases.ensure_databases(cfg, ROOT, ["params"])["prior"]
+        ma = prior.Prior(prior_table, environment)
+        log(f"MicrobeAtlas prior: environment '{environment}', "
+            f"{ma.meta.get('environments', {}).get(environment, '?')} samples")
+        overlap = ma.overlap_warning(prior_table.parent, {n.split('_')[0].split('.')[0] for n in dada2})
+        if overlap:
+            log("WARNING the prior was built before these studies were added and includes them:",
+                ", ".join(overlap), "- delete databases/microbeatlas/ to rebuild it without them")
         inv, errors = parameterize.inventory(built, set(pc["carbon_sinks"]))
         if errors:
             write_json(results / "model_errors.json", errors)
@@ -180,10 +228,10 @@ def main():
             try:
                 asvs, counts = denoise.load_community(folder)
                 status[name].update(parameterize.community_inputs(
-                    name, asvs, counts, models, mmap, priors, fallback, inputs, int(pc["min_genera"])))
+                    name, asvs, counts, models, mmap, priors, fallback, inputs, int(pc["min_genera"]), ma))
                 status[name]["status"] = "inputs_ready"
                 jobs.append((name, inputs, catalog, ROOT / cfg["paths"]["gems"] / "parameter_cache",
-                             results / name / "03_micrm", cfg["micrm"]))
+                             results / name / "03_micrm", dict(cfg["micrm"], environment=environment)))
             except Exception as e:
                 status[name].update(status="skipped", reason=str(e))
                 log("skip", name, e)
@@ -199,8 +247,8 @@ def main():
             meta = read_json(out / "metadata.json")
             same_inputs = meta and all(
                 (job[1] / f).exists() and digest(job[1] / f) == h for f, h in meta.get("input_hashes", {}).items())
-            if same_inputs and not a.rerun:
-                status[name].update(status="completed", jsd=meta["jsd"])
+            if same_inputs and not a.rerun and "metrics" in meta:
+                status[name].update(status="completed", **summary_fields(meta))
             else:
                 todo.append(job)
         workers = max(1, int(cfg["compute"]["parallel_communities"]))
@@ -208,14 +256,17 @@ def main():
             for name, state, meta, err in pool.map(simulate_one, todo):
                 status[name]["status"] = state
                 if meta:
-                    status[name]["jsd"] = meta["jsd"]
+                    status[name].update(summary_fields(meta))
                     shutil.copy2(results / name / "03_micrm" / "comparison.png", figures / f"{name}.png")
                 if err:
                     status[name]["reason"] = err
-                log("MiCRM", name, state, f"JSD={meta['jsd']:.3f}" if meta else err)
+                log("MiCRM", name, state, f"JSD={meta['jsd']:.3f}, retained {status[name].get('retained')}, "
+                    f"rare retained {status[name].get('rare_retained')}" if meta else err)
 
     rows = list(status.values())
-    write_csv(results / "summary.csv", rows, ["community", "status", "genera", "resources", "coverage", "jsd", "reason"])
+    write_csv(results / "summary.csv", rows, ["community", "status", "genera", "resources", "coverage", "prior_matched", "jsd",
+                                              "retained", "rare_retained", "loo_spearman", "loo_retained",
+                                              "gem_only_jsd", "gem_only_retained", "uptake_corrections", "reason"])
     counts = collections.Counter(r["status"] for r in rows)
     log("Done:", dict(counts), "->", results / "summary.csv", "| figures in", results / "figures")
     return 0

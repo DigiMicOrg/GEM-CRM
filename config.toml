@@ -37,9 +37,26 @@ missing_m_policy = "sample"   # "sample" (seeded random volume in observed range
 carbon_sinks = ["cpd00011", "cpd00242"]  # CO2, HCO3-: never treated as resources
 min_genera = 2
 
+[prior]
+# Genus x environment abundance prior from MicrobeAtlas (built automatically on first
+# use: ~3.6 GB download, a few minutes of processing, ~16 GB temporary disk; only the
+# ~30 MB table is kept). Each genus's uptake capacity s is derived from its typical
+# abundance in this environment class, never from the sample being modelled.
+# Classes: soil, aquatic, animal, plant, and sub-classes such as "soil;agricultural",
+# "animal;human", "aquatic;marine" (see databases/microbeatlas/prior_meta.json).
+environment = "soil"
+min_samples = 30          # environment classes with fewer MicrobeAtlas samples are not tabulated
+
 [micrm]
 initial_total = 0.0001    # R0 total, split uniformly over resources
-feed_total = 5.0          # supply rho total, split uniformly over resources
+feed_total = 5.0          # total supply rho; its split over resources is inferred (calibration)
 biomass = 1.0             # C0 of every consumer
 turnover = 0.1
 t_end = 300000.0
+
+# Calibration / evaluation (step 6): equal uptake budget per genus, uptake capacity s
+# from the [prior], nutrient supply inferred from the sample (see workflow/calibrate.py).
+resource_cap = 0.2        # steady-state resource level R <= resource_cap * K (unsaturated uptake)
+detection_limit = 1e-6    # predicted relative abundance below this counts as extinct
+leave_one_out = true      # predict each genus from an environment inferred without it
+plot_scale = "linear"     # comparison bar chart y-axis: "linear" (evenly spaced ticks) or "log"
